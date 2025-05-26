@@ -30,7 +30,6 @@ API_URL = "http://127.0.0.1:9999/chat"
 
 if st.button("Ask Agent!"):
     if user_query.strip():
-        #Step2: Connect with backend via URL
         import requests
 
         payload = {
@@ -41,11 +40,26 @@ if st.button("Ask Agent!"):
             "allow_search": allow_web_search
         }
 
-        response = requests.post(API_URL, json=payload)
+        try:
+            response = requests.post(API_URL, json=payload, timeout=60)
+        except requests.exceptions.RequestException as e:
+            st.error(f"Connection error: {e}")
+            st.stop()
+
         if response.status_code == 200:
-            response_data = response.json()
-            if "error" in response_data:
+            try:
+                response_data = response.json()
+            except ValueError:
+                st.error(f"Expected JSON, but got: {response.text}")
+                st.stop()
+
+            # Safely check for "error" in response
+            if isinstance(response_data, dict) and "error" in response_data:
                 st.error(response_data["error"])
-            else:
+            elif isinstance(response_data, dict) and "answer" in response_data:
                 st.subheader("Agent Response")
-                st.markdown(f"**Final Response:** {response_data}")
+                st.markdown(response_data["answer"])
+            else:
+                st.error(f"Unexpected response format: {response_data}")
+        else:
+            st.error(f"Request failed with status code {response.status_code}")
