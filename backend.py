@@ -42,7 +42,7 @@ def chat_endpoint(request: RequestState):
 
     # Create AI Agent and get response from it!
     response = get_response_from_ai_agent(llm_id, query, allow_search, system_prompt, provider)
-    return response
+    return {"answer": response}
 
 #Step3: Run app & Explore Swagger UI Docs
 if __name__ == "__main__":
