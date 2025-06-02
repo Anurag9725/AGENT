@@ -14,7 +14,7 @@ from langchain_tavily import TavilySearch
 from langchain_core.messages import HumanMessage
 
 gemini_llm = ChatGoogleGenerativeAI(model="gemini-1.5-flash", google_api_key=GEMINI_API_KEY)
-search_tool = TavilySearch(max_results=2, topic="general")
+search_tool = TavilySearch(max_results=5, topic="general")
 
 system_prompt = "Act as an AI chatbot who is smart and friendly"
 
