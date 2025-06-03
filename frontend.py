@@ -84,7 +84,7 @@ if 'api_status' not in st.session_state:
     st.session_state.api_status = None
 
 # API Configuration
-API_URL = "http://127.0.0.1:9999/chat"
+API_URL = "https://researcher-7jza.onrender.com"
 MODEL_NAMES_GEMINI = ["gemini-1.5-flash", "gemini-1.5-pro", "gemini-pro"]
 
 # Predefined system prompts for different use cases
