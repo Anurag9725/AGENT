@@ -98,7 +98,6 @@ Pygments==2.19.1
 msgpack==1.1.0
 rpds-py==0.22.3
 orjson==3.10.15
-
 # Git and versioning
 GitPython==3.1.44
 gitdb==4.0.12
