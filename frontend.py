@@ -84,7 +84,7 @@ if 'api_status' not in st.session_state:
     st.session_state.api_status = None
 
 # API Configuration
-API_URL = "https://agent-wg0o.onrender.com"
+API_URL = "https://agent-wg0o.onrender.com/chat"
 MODEL_NAMES_GEMINI = ["gemini-1.5-flash", "gemini-1.5-pro", "gemini-pro"]
 
 # Predefined system prompts for different use cases
