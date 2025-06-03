@@ -19,14 +19,17 @@ pytz==2024.2
 tzdata==2024.2
 
 # LangChain Ecosystem (Latest Stable)
+langchain==0.1.20
 langchain-core>=0.3.59,<0.4.0
 langchain-community==0.3.23
 langchain-text-splitters==0.3.8
 langchain-google-genai>=2.1.4
+langchain-tavily==0.0.8
 langgraph==0.2.64
 langgraph-checkpoint==2.0.10
 langgraph-sdk==0.1.51
 langsmith==0.2.11
+
 
 # Gemini and Google API
 google-genai>=0.3.0
