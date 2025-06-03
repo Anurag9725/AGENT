@@ -74,7 +74,6 @@ mypy-extensions==1.0.0
 
 # Jinja / Template rendering
 Jinja2==3.1.5
-jinja==1.2.1
 MarkupSafe==3.0.2
 
 # Utilities
