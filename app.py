@@ -11,6 +11,7 @@ import time
 import logging
 import requests
 import asyncio
+import re
 
 # Load environment variables from .env file
 from dotenv import load_dotenv
@@ -70,6 +71,7 @@ class ChatRequest(BaseModel):
     system_prompt: str = Field(..., description="System prompt for the AI agent")
     messages: List[str] = Field(..., description="List of user messages")
     allow_search: bool = Field(default=True, description="Allow real-time data search")
+    client_ip: Optional[str] = Field(default=None, description="Client's public IP address")
 
     @validator('messages')
     def messages_must_not_be_empty(cls, v):
@@ -127,6 +129,7 @@ class EnhancedDataAggregator:
             if response.status_code == 200:
                 financial_data['crypto_prices'] = response.json()
                 logger.info("✓ CoinGecko crypto data fetched")
+                print("CoinGecko API data:", json.dumps(financial_data['crypto_prices'], indent=2))
         except Exception as e:
             logger.error(f"CoinGecko API error: {e}")
         
@@ -137,6 +140,7 @@ class EnhancedDataAggregator:
             if response.status_code == 200:
                 financial_data['exchange_rates'] = response.json()
                 logger.info("✓ Exchange rates fetched")
+                print("Exchange Rate API data:", json.dumps(financial_data['exchange_rates'], indent=2))
         except Exception as e:
             logger.error(f"Exchange Rate API error: {e}")
         
@@ -148,16 +152,27 @@ class EnhancedDataAggregator:
                 if response.status_code == 200:
                     financial_data['stock_quote'] = response.json()
                     logger.info("✓ Finnhub stock data fetched")
+                    print("Finnhub API data:", json.dumps(financial_data['stock_quote'], indent=2))
             except Exception as e:
                 logger.error(f"Finnhub API error: {e}")
         
         return financial_data
-    
+
     async def fetch_news_data(self, query: str = "technology") -> Dict[str, Any]:
         """Fetch real-time news data"""
         news_data = {}
         logger.info("Fetching news data...")
-        
+
+        # Use a default keyword if the query is generic
+        generic_phrases = [
+            "show me the latest news",
+            "latest news",
+            "news",
+            "current news",
+            "today's news"
+        ]
+        newsapi_query = "news" if query.strip().lower() in generic_phrases else query
+
         # Hacker News (free API)
         try:
             url = "https://hacker-news.firebaseio.com/v0/topstories.json"
@@ -172,31 +187,34 @@ class EnhancedDataAggregator:
                         stories.append(story_response.json())
                 news_data['hackernews'] = stories
                 logger.info("✓ Hacker News data fetched")
+                print("Hacker News API data:", json.dumps(news_data['hackernews'], indent=2))
         except Exception as e:
             logger.error(f"Hacker News API error: {e}")
-        
+
         # NewsAPI (if API key available)
         if NEWS_API_KEY:
             try:
-                url = f"https://newsapi.org/v2/top-headlines?q={query}&apiKey={NEWS_API_KEY}&pageSize=3"
+                url = f"https://newsapi.org/v2/top-headlines?q={newsapi_query}&apiKey={NEWS_API_KEY}&pageSize=3"
                 response = requests.get(url, timeout=10)
                 if response.status_code == 200:
                     news_data['newsapi'] = response.json()
                     logger.info("✓ NewsAPI data fetched")
+                    print("NewsAPI data:", json.dumps(news_data['newsapi'], indent=2))
             except Exception as e:
                 logger.error(f"NewsAPI error: {e}")
-        
+
         # Tavily Search
         if self.tavily_search:
             try:
                 tavily_result = self.tavily_search.invoke({"query": query})
                 news_data['tavily_search'] = tavily_result
                 logger.info(f"✓ Tavily search completed: {tavily_result}")
+                print("Tavily Search data:", json.dumps(tavily_result, indent=2, default=str))
             except Exception as e:
                 logger.error(f"Tavily Search error: {e}")
-        
+
         return news_data
-    
+
     async def fetch_weather_data(self, city: str = "New York") -> Dict[str, Any]:
         """Fetch real-time weather data"""
         weather_data = {}
@@ -209,6 +227,7 @@ class EnhancedDataAggregator:
             if response.status_code == 200:
                 weather_data['wttr'] = response.json()
                 logger.info("✓ wttr.in weather data fetched")
+                print("wttr.in API data:", json.dumps(weather_data['wttr'], indent=2))
         except Exception as e:
             logger.error(f"wttr.in API error: {e}")
         
@@ -220,11 +239,12 @@ class EnhancedDataAggregator:
                 if response.status_code == 200:
                     weather_data['weatherapi'] = response.json()
                     logger.info("✓ WeatherAPI data fetched")
+                    print("WeatherAPI data:", json.dumps(weather_data['weatherapi'], indent=2))
             except Exception as e:
                 logger.error(f"WeatherAPI error: {e}")
         
         return weather_data
-    
+
     async def fetch_social_data(self) -> Dict[str, Any]:
         """Fetch social media and trending data"""
         social_data = {}
@@ -238,6 +258,7 @@ class EnhancedDataAggregator:
             if response.status_code == 200:
                 social_data['reddit_hot'] = response.json()
                 logger.info("✓ Reddit data fetched")
+                print("Reddit API data:", json.dumps(social_data['reddit_hot'], indent=2))
         except Exception as e:
             logger.error(f"Reddit API error: {e}")
         
@@ -248,11 +269,12 @@ class EnhancedDataAggregator:
             if response.status_code == 200:
                 social_data['github_trending'] = response.json()
                 logger.info("✓ GitHub trending data fetched")
+                print("GitHub Trending API data:", json.dumps(social_data['github_trending'], indent=2))
         except Exception as e:
             logger.error(f"GitHub API error: {e}")
         
         return social_data
-    
+
     async def fetch_additional_data(self) -> Dict[str, Any]:
         """Fetch additional real-time data"""
         additional_data = {}
@@ -261,10 +283,11 @@ class EnhancedDataAggregator:
         # Quote of the day
         try:
             url = "https://api.quotable.io/random"
-            response = requests.get(url, timeout=10)
+            response = requests.get(url, timeout=10, verify=False)  # <--- Added verify=False
             if response.status_code == 200:
                 additional_data['quote_of_day'] = response.json()
                 logger.info("✓ Quote fetched")
+                print("Quotable API data:", json.dumps(additional_data['quote_of_day'], indent=2))
         except Exception as e:
             logger.error(f"Quotable API error: {e}")
         
@@ -275,41 +298,169 @@ class EnhancedDataAggregator:
             if response.status_code == 200:
                 additional_data['iss_location'] = response.json()
                 logger.info("✓ ISS location fetched")
+                print("ISS Location API data:", json.dumps(additional_data['iss_location'], indent=2))
         except Exception as e:
             logger.error(f"ISS API error: {e}")
         
         return additional_data
     
-    async def aggregate_all_data(self, query: str, context: Dict[str, Any] = None) -> Dict[str, Any]:
+    async def fetch_tomorrowio_weather(self, location: str = "New York") -> dict:
+        """Fetch real-time weather data from Tomorrow.io"""
+        api_key = os.getenv("TOMORROW_IO_API_KEY")
+        if not api_key:
+            return {}
+        try:
+            url = f"https://api.tomorrow.io/v4/weather/realtime?location={location}&apikey={api_key}"
+            response = requests.get(url, timeout=10)
+            if response.status_code == 200:
+                data = response.json()
+                print("Tomorrow.io API data:", json.dumps(data, indent=2))
+                return data
+        except Exception as e:
+            print(f"Tomorrow.io API error: {e}")
+        return {}
+
+    async def fetch_contextualweb_search(self, query: str) -> dict:
+        """Fetch search results from ContextualWeb API"""
+        api_key = os.getenv("CONTEXTUALWEB_API_KEY")
+        if not api_key:
+            return {}
+        try:
+            url = f"https://contextualwebsearch-websearch-v1.p.rapidapi.com/api/Search/WebSearchAPI"
+            # ContextualWeb also offers a free endpoint with API key in header
+            headers = {
+                "X-Access-Token": api_key
+            }
+            params = {"q": query, "pageNumber": 1, "pageSize": 3, "autoCorrect": True}
+            response = requests.get(url, headers=headers, params=params, timeout=10)
+            if response.status_code == 200:
+                data = response.json()
+                print("ContextualWeb API data:", json.dumps(data, indent=2))
+                return data
+        except Exception as e:
+            print(f"ContextualWeb API error: {e}")
+        return {}
+
+    async def fetch_gnews(self, query: str = "news") -> dict:
+        """Fetch news from GNews API"""
+        api_key = os.getenv("GNEWS_API_KEY")
+        if not api_key:
+            return {}
+        try:
+            url = f"https://gnews.io/api/v4/search?q={query}&token={api_key}&lang=en&max=3"
+            response = requests.get(url, timeout=10)
+            if response.status_code == 200:
+                data = response.json()
+                print("GNews API data:", json.dumps(data, indent=2))
+                return data
+        except Exception as e:
+            print(f"GNews API error: {e}")
+        return {}
+
+    async def fetch_serper_data(self, query: str) -> dict:
+        """Fetch data from Serper API (Google Search)"""
+        api_key = os.getenv("SERPER_API_KEY")
+        if not api_key:
+            logger.warning("SERPER_API_KEY not set")
+            return {}
+        try:
+            url = "https://google.serper.dev/search"
+            headers = {"X-API-KEY": api_key, "Content-Type": "application/json"}
+            payload = {"q": query}
+            response = requests.post(url, headers=headers, json=payload, timeout=10)
+            if response.status_code == 200:
+                data = response.json()
+                print("Serper API data:", json.dumps(data, indent=2))
+                return data
+            else:
+                logger.error(f"Serper API error: {response.text}")
+        except Exception as e:
+            logger.error(f"Serper API exception: {e}")
+        return {}
+
+    async def fetch_jina_reader(self, document_url: str) -> str:
+        """Fetch content using Jina AI Reader (markdown, GET request, 5MB limit)"""
+        api_key = os.getenv("JINA_READER_API_KEY")
+        if not api_key:
+            logger.warning("JINA_READER_API_KEY not set")
+            return "Jina Reader API key not set."
+        if not document_url or not isinstance(document_url, str):
+            logger.error("Jina Reader requires a single valid document URL.")
+            return "No valid URL provided for Jina Reader."
+
+        try:
+            jina_url = f"https://r.jina.ai/{requests.utils.quote(document_url, safe='')}"
+            headers = {
+                "Authorization": f"Bearer {api_key}",
+                "Accept": "text/markdown"
+            }
+            # 5MB max content length
+            response = requests.get(jina_url, headers=headers, timeout=15, stream=True)
+            content = b""
+            max_size = 5 * 1024 * 1024  # 5MB
+            for chunk in response.iter_content(1024):
+                content += chunk
+                if len(content) > max_size:
+                    logger.error(f"Content too large for URL: {document_url}")
+                    return f"Error: Content too large to fetch for URL: {document_url}"
+            if response.status_code == 200:
+                return content.decode("utf-8", errors="replace")
+            elif response.status_code == 422:
+                logger.error(f"Jina AI Reader returned 422 for URL: {document_url}")
+                return f"Error: Could not fetch content for URL: {document_url} (Status 422)"
+            else:
+                logger.error(f"Error fetching content for URL: {document_url} - {response.status_code}")
+                return f"Error fetching content for URL: {document_url} (Status {response.status_code})"
+        except Exception as err:
+            logger.error(f"Error fetching content for URL: {document_url} - {err}")
+            return f"Error fetching content for URL: {document_url}"
+
+    async def fetch_ipinfo(self, ip: str = None) -> dict:
+        """Fetch IP information from IPinfo API"""
+        api_key = os.getenv("IPINFO_API_KEY")
+        if not api_key:
+            return {}
+        try:
+            # If ip is None, use 'ip' endpoint to get the caller's IP (if running locally, this is server IP)
+            url = f"https://ipinfo.io/{ip if ip else 'json'}?token={api_key}"
+            response = requests.get(url, timeout=10)
+            if response.status_code == 200:
+                data = response.json()
+                print("IPinfo API data:", json.dumps(data, indent=2))
+                return data
+        except Exception as e:
+            print(f"IPinfo API error: {e}")
+        return {}
+
+    async def aggregate_all_data(self, query: str, context: Dict[str, Any] = None, client_ip: str = None) -> Dict[str, Any]:
         """Aggregate data from all sources based on query context"""
         logger.info(f"Aggregating data for query: {query[:50]}...")
-        
         aggregated_data = {
             'timestamp': datetime.now().isoformat(),
             'query': query,
             'data_sources_used': []
         }
-        
         query_lower = query.lower()
-        
-        # Determine what data to fetch based on query
+
+        # Triggers
         fetch_financial = any(word in query_lower for word in ['stock', 'market', 'crypto', 'bitcoin', 'trading', 'finance', 'money', 'price'])
         fetch_news = any(word in query_lower for word in ['news', 'current', 'latest', 'today', 'happening', 'events'])
         fetch_weather = any(word in query_lower for word in ['weather', 'temperature', 'rain', 'sunny', 'climate'])
-        fetch_social = any(word in query_lower for word in ['trending', 'popular', 'reddit', 'github', 'social'])
-        
+        fetch_social = any(word in query_lower for word in ['trending', 'popular', 'reddit', 'github', 'social','twitter', 'facebook', 'instagram'])
+        fetch_search = any(word in query_lower for word in ['search', 'google'])
+        fetch_jina = any(word in query_lower for word in ['summarize', 'read', 'extract'])
+
         # If no specific category detected, fetch news and additional data
-        if not any([fetch_financial, fetch_news, fetch_weather, fetch_social]):
+        if not any([fetch_financial, fetch_news, fetch_weather, fetch_social, fetch_search, fetch_jina]):
             fetch_news = True
-        
+
         try:
-            # Fetch relevant data
             if fetch_financial:
                 aggregated_data['financial_data'] = await self.fetch_financial_data()
                 aggregated_data['data_sources_used'].extend(['CoinGecko', 'ExchangeRate'])
                 if FINNHUB_API_KEY:
                     aggregated_data['data_sources_used'].append('Finnhub')
-            
+
             if fetch_news:
                 aggregated_data['news_data'] = await self.fetch_news_data(query)
                 aggregated_data['data_sources_used'].extend(['HackerNews'])
@@ -317,9 +468,12 @@ class EnhancedDataAggregator:
                     aggregated_data['data_sources_used'].append('NewsAPI')
                 if TAVILY_API_KEY:
                     aggregated_data['data_sources_used'].append('Tavily')
-            
+                gnews_data = await self.fetch_gnews(query)
+                if gnews_data:
+                    aggregated_data['gnews'] = gnews_data
+                    aggregated_data['data_sources_used'].append('GNews')
+
             if fetch_weather:
-                # Try to extract city from query, fallback to "New York"
                 city = "New York"
                 for word in query_lower.split():
                     if word in ["hyderabad", "delhi", "mumbai", "bangalore", "chennai", "kolkata"]:
@@ -328,27 +482,57 @@ class EnhancedDataAggregator:
                 aggregated_data['data_sources_used'].append('wttr.in')
                 if WEATHER_API_KEY:
                     aggregated_data['data_sources_used'].append('WeatherAPI')
-            
+                tomorrowio_data = await self.fetch_tomorrowio_weather(city)
+                if tomorrowio_data:
+                    aggregated_data['tomorrowio'] = tomorrowio_data
+                    aggregated_data['data_sources_used'].append('Tomorrow.io')
+
             if fetch_social:
                 aggregated_data['social_data'] = await self.fetch_social_data()
                 aggregated_data['data_sources_used'].extend(['Reddit', 'GitHub'])
-            
+                contextualweb_data = await self.fetch_contextualweb_search(query)
+                if contextualweb_data:
+                    aggregated_data['contextualweb'] = contextualweb_data
+                    aggregated_data['data_sources_used'].append('ContextualWeb')
+
+            if fetch_search:
+                serper_data = await self.fetch_serper_data(query)
+                if serper_data:
+                    aggregated_data['serper'] = serper_data
+                    aggregated_data['data_sources_used'].append('Serper')
+
+            if fetch_jina:
+                # Extract the first URL from the query
+                match = re.search(r'(https?://\S+)', query)
+                document_url = match.group(1) if match else None
+                if document_url:
+                    jina_data = await self.fetch_jina_reader(document_url)
+                    if jina_data:
+                        aggregated_data['jina_reader'] = jina_data
+                        aggregated_data['data_sources_used'].append('JinaReader')
+                else:
+                    logger.error("No valid URL found for Jina Reader.")
+
             # Always fetch some additional context
             aggregated_data['additional_data'] = await self.fetch_additional_data()
             aggregated_data['data_sources_used'].extend(['Quotable', 'ISS-API'])
-            
+
             logger.info(f"✓ Data aggregation complete. Sources used: {aggregated_data['data_sources_used']}")
-            
+
         except Exception as e:
             logger.error(f"Error aggregating data: {e}")
             aggregated_data['error'] = str(e)
-        
+
+        print("==== Aggregated Data ====")
+        print(json.dumps(aggregated_data, indent=2, default=str))
+        print("=========================")
+
         return aggregated_data
 
 # Initialize the enhanced data aggregator
 data_aggregator = EnhancedDataAggregator()
 
-async def get_response_from_ai_agent(llm_id, query, allow_search, system_prompt, provider):
+async def get_response_from_ai_agent(llm_id, query, allow_search, system_prompt, provider, client_ip=None):
     """Enhanced AI Agent with multiple real-time data sources"""
     try:
         logger.info(f"Processing request - Model: {llm_id}, Allow Search: {allow_search}")
@@ -370,7 +554,7 @@ async def get_response_from_ai_agent(llm_id, query, allow_search, system_prompt,
         if allow_search:
             try:
                 logger.info("🔍 Fetching real-time data from multiple sources...")
-                realtime_data = await data_aggregator.aggregate_all_data(user_query)
+                realtime_data = await data_aggregator.aggregate_all_data(user_query, client_ip=client_ip)
                 logger.info(f"✅ Real-time data fetched from: {realtime_data.get('data_sources_used', [])}")
 
                 # Optionally, extract weather/news highlights for prompt
@@ -452,7 +636,8 @@ async def chat_endpoint(request: ChatRequest):
             query=request.messages,
             allow_search=request.allow_search,
             system_prompt=request.system_prompt,
-            provider=request.model_provider
+            provider=request.model_provider,
+            client_ip=request.client_ip  # <-- pass client_ip
         )
         
         end_time = time.time()
@@ -469,7 +654,7 @@ async def chat_endpoint(request: ChatRequest):
         
     except Exception as e:
         logger.error(f"❌ Error in chat endpoint: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        return {"error": str(e)}
 
 @app.get("/api-status")
 async def get_api_status():
@@ -481,7 +666,7 @@ async def get_api_status():
             "coingecko": "✅ Available",
             "exchange_rates": "✅ Available", 
             "hacker_news": "✅ Available",
-            "wttr_weather": "✅ Available",
+            "wttr_weather": "✅ Available", 
             "reddit": "✅ Available",
             "github": "✅ Available",
             "quotable": "✅ Available",
@@ -510,19 +695,14 @@ async def startup_event():
     logger.info("=== ✅ Startup Complete ===")
 
 if __name__ == "__main__":
-    import uvicorn
-    
     if not GEMINI_API_KEY:
         print("❌ ERROR: GEMINI_API_KEY is required!")
         print("Add it to your .env file: GEMINI_API_KEY=your_api_key")
-        exit(1)
-    
+    print("🆓 Free APIs: Always available!")
     print("🚀 Starting AI Agent API Server...")
-    print("📁 Loading from .env file...")
+    import uvicorn
+    uvicorn.run("app:app", host="127.0.0.1", port=9999, reload=True, log_level="info")
     print(f"🔑 Gemini API: {'✅' if GEMINI_API_KEY else '❌'}")
     print(f"🔍 Tavily API: {'✅' if TAVILY_API_KEY else '⚠️'}")
     print(f"📰 News API: {'✅' if NEWS_API_KEY else '⚠️'}")
     print(f"🌤️ Weather API: {'✅' if WEATHER_API_KEY else '⚠️'}")
-    print("🆓 Free APIs: Always available!")
-    
-    uvicorn.run("app:app", host="127.0.0.1", port=9999, reload=True, log_level="info")
