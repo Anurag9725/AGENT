@@ -12,6 +12,8 @@ import logging
 import requests
 import asyncio
 import re
+import yfinance as yf
+import wikipedia
 
 # Load environment variables from .env file
 from dotenv import load_dotenv
@@ -432,6 +434,49 @@ class EnhancedDataAggregator:
             print(f"IPinfo API error: {e}")
         return {}
 
+    async def fetch_yfinance_data(self, symbol: str = "AAPL") -> dict:
+        """Fetch real-time stock data using yfinance"""
+        logger.info(f"Fetching yfinance data for {symbol}...")
+        try:
+            stock = yf.Ticker(symbol)
+            data = stock.history(period="1d")
+            if not data.empty:
+                latest = data.iloc[-1]
+                result = {
+                    "symbol": symbol,
+                    "price": latest["Close"],
+                    "open": latest["Open"],
+                    "high": latest["High"],
+                    "low": latest["Low"],
+                    "volume": latest["Volume"]
+                }
+                logger.info(f"✓ yfinance data fetched: {result}")
+                return result
+            else:
+                logger.warning(f"No yfinance data found for {symbol}")
+                return {"error": "No data found for ticker."}
+        except Exception as e:
+            logger.error(f"yfinance error: {e}")
+            return {"error": str(e)}
+
+    async def fetch_wikipedia_summary(self, query: str) -> dict:
+        """Fetch summary from Wikipedia"""
+        logger.info(f"Fetching Wikipedia summary for '{query}'...")
+        try:
+            summary = wikipedia.summary(query, sentences=2)
+            result = {"title": query, "summary": summary}
+            logger.info("✓ Wikipedia summary fetched")
+            return result
+        except wikipedia.exceptions.DisambiguationError as e:
+            logger.warning(f"Wikipedia disambiguation error: {e.options}")
+            return {"error": f"Disambiguation error: {e.options}"}
+        except wikipedia.exceptions.PageError:
+            logger.warning("Wikipedia page not found.")
+            return {"error": "Page not found."}
+        except Exception as e:
+            logger.error(f"Wikipedia error: {e}")
+            return {"error": str(e)}
+
     async def aggregate_all_data(self, query: str, context: Dict[str, Any] = None, client_ip: str = None) -> Dict[str, Any]:
         """Aggregate data from all sources based on query context"""
         logger.info(f"Aggregating data for query: {query[:50]}...")
@@ -449,9 +494,11 @@ class EnhancedDataAggregator:
         fetch_social = any(word in query_lower for word in ['trending', 'popular', 'reddit', 'github', 'social','twitter', 'facebook', 'instagram'])
         fetch_search = any(word in query_lower for word in ['search', 'google'])
         fetch_jina = any(word in query_lower for word in ['summarize', 'read', 'extract'])
+        fetch_yfinance = any(word in query_lower for word in ['stock', 'market', 'price', 'share', 'yfinance'])
+        fetch_wikipedia = any(word in query_lower for word in ['wikipedia', 'wiki', 'encyclopedia', 'who is', 'what is'])
 
         # If no specific category detected, fetch news and additional data
-        if not any([fetch_financial, fetch_news, fetch_weather, fetch_social, fetch_search, fetch_jina]):
+        if not any([fetch_financial, fetch_news, fetch_weather, fetch_social, fetch_search, fetch_jina, fetch_yfinance, fetch_wikipedia]):
             fetch_news = True
 
         try:
@@ -512,6 +559,20 @@ class EnhancedDataAggregator:
                         aggregated_data['data_sources_used'].append('JinaReader')
                 else:
                     logger.error("No valid URL found for Jina Reader.")
+
+            if fetch_yfinance:
+                # Extract symbol if present, else default to AAPL
+                match = re.search(r'\b([A-Z]{1,5})\b', query)
+                symbol = match.group(1) if match else "AAPL"
+                aggregated_data['yfinance'] = await self.fetch_yfinance_data(symbol)
+                aggregated_data['data_sources_used'].append('yfinance')
+
+            if fetch_wikipedia:
+                # Extract topic from query, else use the whole query
+                topic = query.replace("wikipedia", "").replace("wiki", "").strip()
+                topic = topic if topic else query
+                aggregated_data['wikipedia'] = await self.fetch_wikipedia_summary(topic)
+                aggregated_data['data_sources_used'].append('wikipedia')
 
             # Always fetch some additional context
             aggregated_data['additional_data'] = await self.fetch_additional_data()
